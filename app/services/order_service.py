@@ -5,6 +5,7 @@ from decimal import Decimal
 from app.repositories.orders_repo import OrderRepo
 from app.schemas.orders import OrderList, Order as OrderSchema
 from app.models.orders_model import Order as OrderModel, OrderItem as OrderItemModel
+from app.logger import logger
 
 
 class OrderService:
@@ -12,12 +13,13 @@ class OrderService:
         self.order_repo = OrderRepo(db)
         self.db = db
 
-
-
     async def create_order(self, buyer_id: int):
-
+        logger.debug(f"Attempting to create order for buyer_id={buyer_id}")
         cart_items = await self.order_repo.get_cart_items(buyer_id=buyer_id)
         if not cart_items:
+            logger.warning(
+                f"Order creation failed - cart is empty (buyer_id={buyer_id})"
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Cart is empty"
             )
@@ -29,6 +31,10 @@ class OrderService:
             product = cart_item.product
 
             if not product or not product.is_active:
+                logger.warning(
+                    f"Inactive or missing product during order "
+                    f"product_id={cart_item.product_id}"
+                )
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Product {cart_item.product_id} is unavailable",
@@ -36,6 +42,7 @@ class OrderService:
 
             unit_price = product.price
             if unit_price is None:
+                logger.warning(f"Product has no price set (product_id={product.id})")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Product {product.name} has no price set",
@@ -45,6 +52,7 @@ class OrderService:
                 product_id=cart_item.product_id, qty=cart_item.quantity
             )
             if not updated_id:
+                logger.warning(f"Not enough stock for product_id={product.id}")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Not enough stock for product {product.name}",
@@ -52,6 +60,11 @@ class OrderService:
 
             total_price = unit_price * cart_item.quantity
             total_amount += total_price
+
+            logger.debug(
+                f"Added order item: product_id={cart_item.product_id}, "
+                f"qty={cart_item.quantity}, total_price={total_price}"
+            )
 
             order_item = OrderItemModel(
                 product_id=cart_item.product_id,
@@ -65,11 +78,17 @@ class OrderService:
         self.db.add(order)
 
         await self.order_repo.delete_cart_items(buyer_id=buyer_id)
-        
+
         await self.db.commit()
+
+        logger.info(
+            f"Order created successfully (order_id={order.id}, "
+            f"buyer_id={buyer_id}, total={total_amount})"
+        )
 
         created_order = await self.order_repo.load_order_with_items(order_id=order.id)
         if not created_order:
+            logger.error(f"Order created but cannot be loaded (order_id={order.id})")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Order was created but cannot be loaded",
@@ -77,9 +96,11 @@ class OrderService:
 
         return created_order
 
-
-
     async def get_list_orders(self, buyer_id: int, page: int, page_size: int):
+        logger.debug(
+            f"Fetching orders list (buyer_id={buyer_id} "
+            f"page={page}, page_size={page_size})"
+        )
         total = await self.order_repo.get_total_orders(buyer_id=buyer_id)
 
         orders = await self.order_repo.get_orders(
@@ -90,18 +111,24 @@ class OrderService:
             OrderSchema.model_validate(order, from_attributes=True) for order in orders
         ]
 
+        logger.info(f"Orders list fetched (buyer_id={buyer_id}, {len(orders)})")
+
         return OrderList(
             items=pydantic_orders, total=total or 0, page=page, page_size=page_size
         )
 
-
     async def get_order(self, order_id: int, buyer_id: int):
+        logger.debug(f"Fetching order (order_id={order_id}, buyer_id={buyer_id})")
         order = await self.order_repo.load_order_with_items(order_id=order_id)
 
         if not order or order.buyer_id != buyer_id:
+            logger.warning(
+                f"Order not found or unauthorized access attempt"
+                f"(order_id={order_id}, buyer_id={buyer_id})"
+            )
             HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
             )
+        logger.info(f"Order fetched (order_id={order_id})")
 
         return order
-

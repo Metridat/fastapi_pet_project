@@ -56,7 +56,7 @@ async def create_category(category: CreateCategorySchema,
 
 
 @router.put('/{category_id}', response_model=CategorySchema)
-async def upgrade_category(category_id: Annotated[int, Path(ge=1)], 
+async def update_category(category_id: Annotated[int, Path(ge=1)], 
                           new_category: CreateCategorySchema,
                           service: CategoryService = Depends(get_category_service),
                           current_admin: UserModel = Depends(get_current_user_with_role(UserRole.admin))):
