@@ -53,6 +53,3 @@ logs/
 *.sql.backup
 postgres_data/
 docker-compose.override.yml
-
-# Миграции (если не хотите их коммитить, но обычно коммитят)
-app/migrations/versions/* 
