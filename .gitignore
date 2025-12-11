@@ -48,7 +48,6 @@ Thumbs.db
 logs/
 
 
-# PostgreSQL (добавьте это к предыдущему контенту)
 *.pgdump
 *.sql.backup
 postgres_data/
