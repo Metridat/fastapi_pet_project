@@ -33,7 +33,7 @@
 
 1. Клонируйте репозиторий  
    ```bash
-   git clone https://github.com/YourUsername/fastapi_pet_project.git
+   git clone https://github.com/Metridat/fastapi_pet_project.git
    cd fastapi_pet_project
 
 2. Скопируйте пример окружения:
